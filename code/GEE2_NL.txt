@@ -1,0 +1,57 @@
+// Load the nightlights dataset
+var nightlights = ee.Image('projects/[anonymized]/assets/nightlights_harmonized');
+var newBands = ee.Image('projects/[anonymized]/assets/combinedNL_2022_2024');
+var newBandNames = ['b31', 'b32', 'b33'];  // Replace with meaningful names if you want
+var newBandsRenamed = newBands.rename(newBandNames);
+
+var nightlights = nightlights.addBands(newBandsRenamed);
+
+
+// Load the polygons (e.g., tang2023)
+var tang2023 = ee.FeatureCollection("projects/[anonymized]/assets/tang2023");
+
+
+// Donut function (50–100 km)
+// var createDonut = function(geometry, innerRadius, outerRadius) {
+//   var centroid = geometry.centroid();
+//   var outer = centroid.buffer(outerRadius);
+//   var inner = centroid.buffer(innerRadius);
+//   return outer.difference(inner);
+// };
+
+// Create donut geometries ONCE
+// var innerRadius = 20000;
+// var outerRadius = 50000;
+// var donuts = tang2023.map(function(feature) {
+//   var donut = createDonut(feature.geometry(), innerRadius, outerRadius);
+//   return feature.setGeometry(donut);
+// });
+
+var buffer100km = tang2023.map(function(feature) {
+  var centroid = feature.geometry().centroid();
+  var buffer = centroid.buffer(100000);  // 100 km
+  return feature.setGeometry(buffer);
+});
+
+// SINGLE reduceRegions call
+var result = nightlights.reduceRegions({
+  collection: buffer100km,
+  // collection: donuts,
+  // collection: tang2023, // this one: for MeanNightLightsPolygon
+  reducer: ee.Reducer.mean(),
+  scale: 1000
+});
+
+// Optionally, export the results as a table if needed
+Export.table.toDrive({
+  collection: result,
+  // description: 'MeanNightLightsPolygon',
+  // description: 'MeanNightLights20_50km',
+  description: 'MeanNightLights100km',
+  fileFormat: 'CSV'
+  // selectors: ['OBJECTID', 'meanValues']  // Columns to include in the CSV
+});
+
+
+
+

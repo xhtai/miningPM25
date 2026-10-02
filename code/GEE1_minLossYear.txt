@@ -1,0 +1,26 @@
+// goal: get treecover2000, loss and lossyear from Hansen data (2001-2024)
+// https://developers.google.com/earth-engine/datasets/catalog/UMD_hansen_global_forest_change_2024_v1_12#bands
+
+// Load the global forest change dataset
+var dataset = ee.Image("UMD/hansen/global_forest_change_2024_v1_12");
+
+// Load the polygons from asset
+var tang2023 = ee.FeatureCollection("projects/[anonymized]/assets/tang2023");
+
+// Select the relevant bands
+var lossyear = dataset.select('lossyear');
+
+// Reduce the lossyear band by the polygons
+var minLossYearByPolygon = lossyear.reduceRegions({
+  collection: tang2023,  // FeatureCollection with polygons (e.g., tang2023)
+  reducer: ee.Reducer.min(),  // Compute the minimum lossyear per polygon
+  scale: 30  // Resolution of the dataset (adjust if needed)
+});
+
+Export.table.toDrive({
+  collection: minLossYearByPolygon,
+  description: 'LossYearResults',
+  fileFormat: 'CSV'
+});
+
+

@@ -1,0 +1,57 @@
+// Load LandScan global dataset
+var landscanRaw = ee.ImageCollection(
+  'projects/sat-io/open-datasets/ORNL/LANDSCAN_GLOBAL'
+);
+
+// Convert collection → multiband image
+// Each band will be named like: 2000, 2001, etc.
+var landscanMulti = landscanRaw.map(function(img) {
+  var id = ee.String(img.get('system:index'));  
+  var year = ee.Number.parse(id.split('-').get(-1));
+  return img.rename(ee.String('pop_').cat(year.format()));
+}).toBands();
+
+
+// Load mine polygons
+var tang2023 = ee.FeatureCollection(
+  "projects/[anonymized]/assets/tang2023"
+);
+
+// Donut function (50–100 km)
+var createDonut = function(geometry, innerRadius, outerRadius) {
+  var centroid = geometry.centroid();
+  var outer = centroid.buffer(outerRadius);
+  var inner = centroid.buffer(innerRadius);
+  return outer.difference(inner);
+};
+
+var innerRadius = 50000;
+var outerRadius = 100000;
+
+// Create donut geometries ONCE
+var donuts = tang2023.map(function(feature) {
+  var donut = createDonut(feature.geometry(), innerRadius, outerRadius);
+  return feature.setGeometry(donut);
+});
+
+// var buffer5km = tang2023.map(function(feature) {
+//   var centroid = feature.geometry().centroid();
+//   var buffer = centroid.buffer(5000);  // 1 km
+//   return feature.setGeometry(buffer);
+// });
+
+// SINGLE reduceRegions call
+var result = landscanMulti.reduceRegions({
+  // collection: buffer5km,
+  collection: donuts,
+  reducer: ee.Reducer.mean(),
+  scale: 1000,
+  tileScale: 4
+});
+
+// Export
+Export.table.toDrive({
+  collection: result,
+  description: 'LandscanMeanPop_50_100km',
+  fileFormat: 'CSV'
+});
